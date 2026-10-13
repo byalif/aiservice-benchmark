@@ -20,8 +20,26 @@ only measures and writes the results, so the engineering team can decide.
 ## How to run it
 
 ```bash
-export AISERVICE_TENANT_ID=dev
-export AISERVICE_TEST_SIMILARITY=true
+# Choose which capabilities to test. Several can be true; they run one after another.
+export AISERVICE_TEST_ALMWATSONX=true
+export AISERVICE_TEST_SIMILARITY=false
+export AISERVICE_TEST_FMEA=false
+export AISERVICE_TEST_NL2OSLC=false
+export AISERVICE_TEST_FIELDEXTRACTOR=false
+export AISERVICE_TEST_SMARTCLEANSE=false
+export AISERVICE_TEST_INSIGHTS=false
+export AISERVICE_TEST_DOCSEARCH=false
+export AISERVICE_TEST_PCC=false
+export AISERVICE_TEST_MCC=false
+
+# Where to look
+export AISERVICE_TENANT_ID=meta
+
+# Load settings
+export AISERVICE_CONCURRENCY=10   # Concurrent virtual users
+export AISERVICE_DURATION=180     # Test duration in seconds (3 mins)
+export AISERVICE_RAMP_UP=5        # User ramp-up time in seconds
+
 ansible-playbook playbooks/benchmark.yml
 ```
 
