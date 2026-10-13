@@ -1,0 +1,43 @@
+---
+- name: Render Benchmark Results Report
+  ansible.builtin.set_fact:
+    summary_markdown_content: |
+      # AI Service Benchmark Results
+
+      Generated: {{ lookup('pipe', 'date -u +"%Y-%m-%dT%H:%M:%SZ"') }}
+
+      ## 1. Pod sizes at the time of the test
+
+      | Capability | Model ID | Namespace | Workers | CPU (Req / Lim) | Memory (Req / Lim) |
+      | :--- | :--- | :--- | :--- | :--- | :--- |
+      {% for item in benchmark_final_results %}
+      | **{{ item.capability | capitalize }}** | `{{ item.model_id }}` | `{{ item.namespace }}` | {{ item.current_workers if item.current_workers | int > 0 else 'n/a' }} | `{{ item.current_cpu_req }} / {{ item.current_cpu_lim }}` | `{{ item.current_mem_req }} / {{ item.current_mem_lim }}` |
+      {% endfor %}
+
+      ## 2. Load test results
+
+      Peak CPU and memory are the highest `oc adm top` sample taken during the run.
+
+      | Capability | Users | Duration | Requests | Errors | P95 Latency | Mean Latency | Throughput | Peak CPU | Peak Memory |
+      | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+      {% for item in benchmark_final_results %}
+      | **{{ item.capability | capitalize }}** | {{ item.concurrency }} | {{ item.duration }}s | {{ item.samples }} | {{ item.error_pct }}% | {{ item.p95_ms }} ms | {{ item.mean_ms }} ms | {{ item.throughput_rps }} req/s | {{ item.peak_cpu_millicores }}m | {{ item.peak_memory_mib }}Mi |
+      {% endfor %}
+
+- name: Ensure Results Output Directory Exists
+  ansible.builtin.file:
+    path: "{{ aiservice_results_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Save Results as JSON
+  ansible.builtin.copy:
+    content: "{{ benchmark_final_results | to_nice_json }}"
+    dest: "{{ aiservice_results_dir }}/benchmark_results.json"
+    mode: '0644'
+
+- name: Save Results Report
+  ansible.builtin.copy:
+    content: "{{ summary_markdown_content }}"
+    dest: "{{ aiservice_results_dir }}/BENCHMARK_RESULTS.md"
+    mode: '0644'

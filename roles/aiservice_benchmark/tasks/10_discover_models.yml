@@ -1,0 +1,325 @@
+---
+# Models are matched by InferenceService name or by predictor container image.
+
+- name: Query KServe InferenceServices across all discovered tenant namespaces
+  kubernetes.core.k8s_info:
+    api_version: serving.kserve.io/v1beta1
+    kind: InferenceService
+    namespace: "{{ item }}"
+  loop: "{{ discovered_tenant_namespaces }}"
+  register: raw_isvcs_results
+
+- name: Flatten Discovered InferenceServices
+  ansible.builtin.set_fact:
+    active_isvcs: "{{ raw_isvcs_results.results | map(attribute='resources') | flatten }}"
+
+# Add a 'first_image' field to each ISVC so it can be filtered on directly.
+- name: Reset annotated ISVC list
+  ansible.builtin.set_fact:
+    active_isvcs_annotated: []
+
+- name: Annotate ISVCs with First Container Image
+  ansible.builtin.set_fact:
+    active_isvcs_annotated: >-
+      {{
+        active_isvcs_annotated + [
+          isvc_item | combine({'first_image':
+            (isvc_item.spec.predictor.containers | default([{}]))[0].image | default('')
+          })
+        ]
+      }}
+  loop: "{{ active_isvcs }}"
+  loop_control:
+    loop_var: isvc_item
+    label: "{{ isvc_item.metadata.name }}"
+
+- name: Promote annotated list back to active_isvcs
+  ansible.builtin.set_fact:
+    active_isvcs: "{{ active_isvcs_annotated }}"
+
+- name: Initialize Benchmark Queue
+  ansible.builtin.set_fact:
+    benchmark_targets: []
+
+# Match capabilities to InferenceServices (name match + image match, deduplicated)
+
+- name: Match Similarity Models
+  when: aiservice_test_similarity | bool
+  vars:
+    pattern: '(?i)similarity'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'similarity',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('similarity'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('1'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('2'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('5Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match FMEA Models
+  when: aiservice_test_fmea | bool
+  vars:
+    pattern: '(?i)fmea|11007020c54611f'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'fmea',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('fmea'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('2'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('8'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('8Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('16Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match Field Extractor Models
+  when: aiservice_test_fieldextractor | bool
+  vars:
+    pattern: '(?i)fieldextractor'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'fieldextractor',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('fieldextractor'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('1'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('8'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('20Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match MCC Models
+  when: aiservice_test_mcc | bool
+  vars:
+    pattern: '(?i)mcc'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'mcc',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('mcc'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('1'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('2'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('5Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match PCC Models
+  when: aiservice_test_pcc | bool
+  vars:
+    pattern: '(?i)pcc'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'pcc',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('pcc'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('1'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('2'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('5Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match Doc Search Models
+  when: aiservice_test_docsearch | bool
+  vars:
+    pattern: '(?i)docsearch'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'docsearch',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('docsearch'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('2'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('4'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('8Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('12Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match NL2OSLC Models
+  when: aiservice_test_nl2oslc | bool
+  vars:
+    pattern: '(?i)nl2oslc|b60441f0c0d711f'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'nl2oslc',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('nl2oslc'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('2'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('12'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('3Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('12Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match Insights Generator Models
+  when: aiservice_test_insights | bool
+  vars:
+    pattern: '(?i)insights|insightsgenerator|3c3cb4b0c54611f'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'insightsgenerator',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('insights'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('2'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('8'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('12Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match Smart Cleanse Models
+  when: aiservice_test_smartcleanse | bool
+  vars:
+    pattern: '(?i)smartcleanse'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'smartcleanse',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('smartcleanse'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('1'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('2'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('4Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('8Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+- name: Match ALM Watsonx Models
+  when: aiservice_test_almwatsonx | bool
+  vars:
+    pattern: '(?i)watsonx|almwatsonx'
+    by_name:  "{{ active_isvcs | selectattr('metadata.name', 'search', pattern) | list }}"
+    by_image: "{{ active_isvcs
+                               | selectattr('first_image', 'search', pattern)
+                               | list }}"
+    matched: "{{ (by_name + by_image) | unique }}"
+  ansible.builtin.set_fact:
+    benchmark_targets: >-
+      {{
+        benchmark_targets + [{
+          'capability': 'almwatsonx',
+          'model_id': item.metadata.name,
+          'namespace': item.metadata.namespace,
+          'image': (item.spec.predictor.containers | default([{}]))[0].image | default('watsonx'),
+          'cpu_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.cpu | default('500m'),
+          'cpu_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.cpu | default('1'),
+          'mem_req': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).requests.memory | default('1Gi'),
+          'mem_lim': ((item.spec.predictor.containers | default([{}]))[0].resources | default({})).limits.memory | default('2Gi')
+        }]
+      }}
+  loop: "{{ matched[:1] }}"
+
+# Record each target's current --workers value (0 if not set)
+- name: Reset worker-annotated target list
+  ansible.builtin.set_fact:
+    benchmark_targets_annotated: []
+
+- name: Annotate Benchmark Targets with Current Worker Count
+  vars:
+    _isvc: >-
+      {{ active_isvcs
+         | selectattr('metadata.name', 'equalto', bt_item.model_id)
+         | selectattr('metadata.namespace', 'equalto', bt_item.namespace)
+         | first }}
+    _args: >-
+      {{ ((_isvc.spec.predictor.containers | default([{}]))[0].args
+          | default(_isvc.spec.predictor.model.args | default([]))) | join(',') }}
+    _workers: "{{ (_args | regex_search('--workers,([0-9]+)', '\\1') | default([0], true) | first) | int }}"
+  ansible.builtin.set_fact:
+    benchmark_targets_annotated: "{{ benchmark_targets_annotated + [bt_item | combine({'workers': _workers | int})] }}"
+  loop: "{{ benchmark_targets }}"
+  loop_control:
+    loop_var: bt_item
+    label: "{{ bt_item.capability }}"
+
+- name: Promote worker-annotated targets
+  ansible.builtin.set_fact:
+    benchmark_targets: "{{ benchmark_targets_annotated }}"
+
+- name: Display Benchmark Targets Queue
+  ansible.builtin.debug:
+    msg: "Queued {{ benchmark_targets | length }} capabilities for benchmarking: {{ benchmark_targets | map(attribute='capability') | list }}"

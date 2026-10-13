@@ -1,0 +1,80 @@
+---
+- name: "Starting Benchmark for {{ target_item.capability | upper }} (Model: {{ target_item.model_id }})"
+  ansible.builtin.debug:
+    msg: "Benchmarking capability: {{ target_item.capability }} in {{ target_item.namespace }} with {{ aiservice_concurrency }} users for {{ aiservice_duration }}s"
+
+- name: "Run Capability Benchmark Script"
+  ansible.builtin.command: >
+    {{ role_path }}/files/run_benchmark.sh
+    {{ aiservice_concurrency }}
+    {{ aiservice_duration }}
+    {{ target_item.model_id }}
+    {{ target_item.namespace }}
+    {{ aiservice_workload_type }}
+    {{ aiservice_benchmark_mode }}
+    {{ discovered_gateway_host }}
+    {{ target_item.capability }}
+  register: bench_exec_output
+  changed_when: true
+
+- name: "Locate Latest Baseline JMeter Run Directory"
+  ansible.builtin.shell: >
+    ls -td {{ role_path }}/results/{{ target_item.model_id }}_* | head -n 1
+  register: latest_baseline_run_cmd
+  changed_when: false
+
+- name: "Read Baseline JMeter Statistics JSON"
+  ansible.builtin.slurp:
+    src: "{{ latest_baseline_run_cmd.stdout | trim }}/html_report/statistics.json"
+  register: baseline_stat_json_raw
+  ignore_errors: true
+
+- name: "Read CPU/Memory Peak from Background Sampler Log"
+  # Log format: <timestamp> <pod_name> <cpu> <memory>
+  ansible.builtin.shell: >
+    awk 'NF>=4 {
+      gsub(/m/, "", $3); gsub(/Mi/, "", $4);
+      if ($3+0 > max_cpu) max_cpu=$3+0;
+      if ($4+0 > max_mem) max_mem=$4+0;
+    } END { printf "%d %d", max_cpu+0, max_mem+0 }'
+    {{ latest_baseline_run_cmd.stdout | trim }}/cpu_memory_over_time.log
+  register: peak_resources_cmd
+  changed_when: false
+  ignore_errors: true
+
+- name: "Record Benchmark Results for {{ target_item.capability }}"
+  vars:
+    stat_data: "{{ (baseline_stat_json_raw.content | b64decode | from_json) if (baseline_stat_json_raw.content is defined) else {} }}"
+    total_stat: "{{ stat_data['Total'] | default(stat_data['Predict Request'] | default({})) }}"
+    p95_ms: "{{ (total_stat.pct2ResTime | default(0)) | float | round(1) }}"
+    mean_ms: "{{ (total_stat.meanResTime | default(0)) | float | round(1) }}"
+    tps: "{{ (total_stat.throughput | default(0)) | float | round(2) }}"
+    error_pct: "{{ (total_stat.errorPct | default(0)) | float | round(1) }}"
+    samples: "{{ total_stat.sampleCount | default(0) | int }}"
+    # Peak CPU / memory from the sampler log
+    _peak_parts: "{{ (peak_resources_cmd.stdout | default('0 0') | trim).split() }}"
+    peak_cpu_m:  "{{ _peak_parts[0] | default('0') | int }}"
+    peak_mem_mi: "{{ _peak_parts[1] | default('0') | int }}"
+  ansible.builtin.set_fact:
+    benchmark_final_results: >-
+      {{
+        benchmark_final_results + [{
+          'capability':              target_item.capability,
+          'model_id':                target_item.model_id,
+          'namespace':               target_item.namespace,
+          'current_cpu_req':         target_item.cpu_req,
+          'current_cpu_lim':         target_item.cpu_lim,
+          'current_mem_req':         target_item.mem_req,
+          'current_mem_lim':         target_item.mem_lim,
+          'current_workers':         target_item.workers | default(0),
+          'p95_ms':                  p95_ms,
+          'mean_ms':                 mean_ms,
+          'throughput_rps':          tps,
+          'error_pct':               error_pct,
+          'samples':                 samples,
+          'peak_cpu_millicores':     peak_cpu_m,
+          'peak_memory_mib':         peak_mem_mi,
+          'concurrency':             aiservice_concurrency | int,
+          'duration':                aiservice_duration
+        }]
+      }}

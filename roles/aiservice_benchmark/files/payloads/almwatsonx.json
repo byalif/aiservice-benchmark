@@ -1,0 +1,13 @@
+{
+  "instances": [
+    {
+      "model_type": "watsonx__gpt_120b_1_config",
+      "url": "https://us-south.ml.cloud.ibm.com",
+      "prompt": [
+        {
+          "text": "Summarize corrective maintenance actions for turbine overheat alarm"
+        }
+      ]
+    }
+  ]
+}

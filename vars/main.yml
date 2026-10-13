@@ -1,0 +1,25 @@
+---
+# Playbook-level variables. Values set here override the role defaults.
+
+# Cluster / tenant identity. Leave empty to auto-discover.
+aiservice_namespace:   "{{ lookup('env', 'AISERVICE_NAMESPACE')   | default('', true) }}"
+aiservice_tenant_id:   "{{ lookup('env', 'AISERVICE_TENANT_ID')   | default('', true) }}"
+aiservice_instance_id: "{{ lookup('env', 'AISERVICE_INSTANCE_ID') | default('', true) }}"
+
+# Capability test toggles
+aiservice_test_similarity:     "{{ lookup('env', 'AISERVICE_TEST_SIMILARITY')     | default('true',  true) | bool }}"
+aiservice_test_fmea:           "{{ lookup('env', 'AISERVICE_TEST_FMEA')           | default('false', true) | bool }}"
+aiservice_test_mcc:            "{{ lookup('env', 'AISERVICE_TEST_MCC')            | default('false', true) | bool }}"
+aiservice_test_fieldextractor: "{{ lookup('env', 'AISERVICE_TEST_FIELDEXTRACTOR') | default('false', true) | bool }}"
+aiservice_test_smartcleanse:   "{{ lookup('env', 'AISERVICE_TEST_SMARTCLEANSE')   | default('false', true) | bool }}"
+aiservice_test_docsearch:      "{{ lookup('env', 'AISERVICE_TEST_DOCSEARCH')      | default('false', true) | bool }}"
+aiservice_test_nl2oslc:        "{{ lookup('env', 'AISERVICE_TEST_NL2OSLC')        | default('false', true) | bool }}"
+aiservice_test_insights:       "{{ lookup('env', 'AISERVICE_TEST_INSIGHTS')       | default('false', true) | bool }}"
+
+# Load parameters
+aiservice_concurrency: "{{ lookup('env', 'AISERVICE_CONCURRENCY') | default(10,  true) | int }}"
+aiservice_duration:    "{{ lookup('env', 'AISERVICE_DURATION')    | default(180, true) | int }}"
+aiservice_ramp_up:     "{{ lookup('env', 'AISERVICE_RAMP_UP')     | default(5,   true) | int }}"
+
+# Output directory
+aiservice_results_dir: "{{ lookup('env', 'AISERVICE_RESULTS_DIR') | default(playbook_dir + '/../results', true) }}"

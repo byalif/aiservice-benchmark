@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="AI Service Capability Benchmark" enabled="true">
+      <stringProp name="TestPlan.comments">JMeter test plan for AI Service inference benchmarking.
+Supports both sync models (similarity, fmea, insightsgenerator, nl2oslc) and
+async queue-based models (fieldextractor, smartcleanse).
+
+Pass -JIS_ASYNC=true for async models. The plan will:
+  1. POST /predict  — record UUID from response
+  2. Poll S3 via MinIO HTTP until result appears (or timeout)
+  3. Wrap both in a Transaction so the recorded latency = full end-to-end time.
+</stringProp>
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables" enabled="true">
+        <collectionProp name="Arguments.arguments">
+
+          <elementProp name="HOST" elementType="Argument">
+            <stringProp name="Argument.name">HOST</stringProp>
+            <stringProp name="Argument.value">${__P(HOST,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PORT" elementType="Argument">
+            <stringProp name="Argument.name">PORT</stringProp>
+            <stringProp name="Argument.value">${__P(PORT,8080)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PROTOCOL" elementType="Argument">
+            <stringProp name="Argument.name">PROTOCOL</stringProp>
+            <stringProp name="Argument.value">${__P(PROTOCOL,http)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="MODEL_ID" elementType="Argument">
+            <stringProp name="Argument.name">MODEL_ID</stringProp>
+            <stringProp name="Argument.value">${__P(MODEL_ID,s3dbe03f10c3a611f)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="TOKEN" elementType="Argument">
+            <stringProp name="Argument.name">TOKEN</stringProp>
+            <stringProp name="Argument.value">${__P(TOKEN,)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PAYLOAD_FILE" elementType="Argument">
+            <stringProp name="Argument.name">PAYLOAD_FILE</stringProp>
+            <stringProp name="Argument.value">${__P(PAYLOAD_FILE,payloads/single.json)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PATH" elementType="Argument">
+            <stringProp name="Argument.name">PATH</stringProp>
+            <stringProp name="Argument.value">${__P(PATH,/v1/models/${MODEL_ID}:predict)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="IS_ASYNC" elementType="Argument">
+            <stringProp name="Argument.name">IS_ASYNC</stringProp>
+            <stringProp name="Argument.value">${__P(IS_ASYNC,false)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="S3_HOST" elementType="Argument">
+            <stringProp name="Argument.name">S3_HOST</stringProp>
+            <stringProp name="Argument.value">${__P(S3_HOST,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="S3_PORT" elementType="Argument">
+            <stringProp name="Argument.name">S3_PORT</stringProp>
+            <stringProp name="Argument.value">${__P(S3_PORT,9000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="S3_USER" elementType="Argument">
+            <stringProp name="Argument.name">S3_USER</stringProp>
+            <stringProp name="Argument.value">${__P(S3_USER,minio)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="S3_PASS" elementType="Argument">
+            <stringProp name="Argument.name">S3_PASS</stringProp>
+            <stringProp name="Argument.value">${__P(S3_PASS,minio123)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="ASYNC_POLL_INTERVAL_MS" elementType="Argument">
+            <stringProp name="Argument.name">ASYNC_POLL_INTERVAL_MS</stringProp>
+            <stringProp name="Argument.value">${__P(ASYNC_POLL_INTERVAL_MS,5000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="ASYNC_TIMEOUT_MS" elementType="Argument">
+            <stringProp name="Argument.name">ASYNC_TIMEOUT_MS</stringProp>
+            <stringProp name="Argument.value">${__P(ASYNC_TIMEOUT_MS,300000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+
+        </collectionProp>
+      </elementProp>
+      <stringProp name="TestPlan.user_define_classpath"></stringProp>
+    </TestPlan>
+    <hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Concurrent Inference Users" enabled="true">
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <intProp name="LoopController.loops">-1</intProp>
+        </elementProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(USERS,10)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(RAMP_UP,5)}</stringProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">${__P(DURATION,60)}</stringProp>
+        <stringProp name="ThreadGroup.delay">0</stringProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+      </ThreadGroup>
+      <hashTree>
+
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json</stringProp>
+            </elementProp>
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Authorization</stringProp>
+              <stringProp name="Header.value">Bearer ${TOKEN}</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <hashTree/>
+
+        <!-- ── ASYNC path: IfController gates the Transaction + poll loop ── -->
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="If async" enabled="true">
+          <stringProp name="IfController.condition">"${IS_ASYNC}" == "true"</stringProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+          <boolProp name="IfController.useExpression">false</boolProp>
+        </IfController>
+        <hashTree>
+
+          <TransactionController guiclass="TransactionControllerGui" testclass="TransactionController"
+              testname="Async End-to-End Latency" enabled="true"
+              generateParentSample="true" includeTimers="false">
+          </TransactionController>
+          <hashTree>
+
+            <!-- 1. Submit job -->
+            <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Predict Request (async submit)" enabled="true">
+              <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+              <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                <collectionProp name="Arguments.arguments">
+                  <elementProp name="" elementType="HTTPArgument">
+                    <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                    <stringProp name="Argument.value">${__FileToString(${PAYLOAD_FILE},UTF-8,)}</stringProp>
+                    <stringProp name="Argument.metadata">=</stringProp>
+                  </elementProp>
+                </collectionProp>
+              </elementProp>
+              <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+              <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+              <stringProp name="HTTPSampler.protocol">${PROTOCOL}</stringProp>
+              <stringProp name="HTTPSampler.path">${PATH}</stringProp>
+              <stringProp name="HTTPSampler.method">POST</stringProp>
+              <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+              <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+              <intProp name="HTTPSampler.response_timeout">30000</intProp>
+            </HTTPSamplerProxy>
+            <hashTree>
+              <!-- Extract uuid + s3 path from accept response -->
+              <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Extract UUID and S3 path" enabled="true">
+                <stringProp name="scriptLanguage">groovy</stringProp>
+                <stringProp name="script">
+import groovy.json.JsonSlurper
+def body = prev.getResponseDataAsString()
+try {
+    def json = new JsonSlurper().parseText(body)
+    def uuid = json?.uuid ?: ""
+    def loc  = json?.result_location ?: ""
+    vars.put("async_uuid",     uuid)
+    vars.put("async_done",     uuid.isEmpty() ? "true" : "false")
+    vars.put("async_start_ms", String.valueOf(System.currentTimeMillis()))
+    if (!loc.isEmpty()) {
+        vars.put("async_s3_path", "/" + loc.replaceFirst("^s3://", ""))
+    }
+} catch (Exception e) {
+    vars.put("async_done", "true")
+    log.warn("async extract failed: " + e.getMessage())
+}
+                </stringProp>
+              </JSR223PostProcessor>
+              <hashTree/>
+            </hashTree>
+
+            <!-- 2. Poll S3 until result ready or timeout -->
+            <WhileController guiclass="WhileControllerGui" testclass="WhileController" testname="Poll until result ready" enabled="true">
+              <stringProp name="WhileController.condition">${__groovy(
+                vars.get("async_done") != "true"
+                &amp;&amp; (System.currentTimeMillis() - Long.parseLong(vars.get("async_start_ms") ?: "0")) &lt; Long.parseLong(vars.get("ASYNC_TIMEOUT_MS") ?: "300000")
+              ,)}</stringProp>
+            </WhileController>
+            <hashTree>
+
+              <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Poll interval" enabled="true">
+                <stringProp name="ConstantTimer.delay">${ASYNC_POLL_INTERVAL_MS}</stringProp>
+              </ConstantTimer>
+              <hashTree/>
+
+              <!-- Poll S3 via boto3 subprocess — MinIO requires AWS Signature V4,
+                   not HTTP Basic, so JMeter's AuthManager cannot be used here.
+                   We shell out to python3 (available on the benchmark host) which
+                   uses boto3 with the same credentials run_benchmark.sh uses. -->
+              <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Poll S3 result" enabled="true">
+                <stringProp name="scriptLanguage">groovy</stringProp>
+                <stringProp name="script">
+def s3path  = vars.get("async_s3_path") ?: ""   // /bucket/key
+def parts   = s3path.replaceFirst("^/","").split("/", 2)
+def bucket  = parts.length > 0 ? parts[0] : ""
+def key     = parts.length > 1 ? parts[1] : ""
+def s3host  = vars.get("S3_HOST") ?: "localhost"
+def s3port  = vars.get("S3_PORT") ?: "9000"
+def s3user  = vars.get("S3_USER") ?: "minio"
+def s3pass  = vars.get("S3_PASS") ?: "minio123"
+
+def cmd = [
+  "python3", "-c",
+  """
+import boto3, sys
+from botocore.client import Config
+s3 = boto3.client('s3',
+    endpoint_url='http://${s3host}:${s3port}',
+    aws_access_key_id='${s3user}',
+    aws_secret_access_key='${s3pass}',
+    config=Config(signature_version='s3v4'),
+    region_name='us-east-1')
+try:
+    s3.head_object(Bucket='${bucket}', Key='${key}')
+    print('200')
+except s3.exceptions.ClientError as e:
+    print(e.response['Error']['Code'])
+except Exception as e:
+    print('ERR:' + str(e))
+""".stripIndent()
+]
+
+def proc  = cmd.execute()
+proc.waitForOrKill(8000)
+def out   = proc.text?.trim() ?: "ERR"
+SampleResult.setResponseCode(out == "200" ? "200" : "404")
+SampleResult.setResponseMessage(out)
+SampleResult.setSuccessful(out == "200")
+if (out == "200") {
+    vars.put("async_done", "true")
+}
+                </stringProp>
+              </JSR223Sampler>
+              <hashTree/>
+
+            </hashTree>
+            <!-- end WhileController -->
+
+            <!-- Timeout guard -->
+            <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Timeout check" enabled="true">
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="script">
+def elapsed = System.currentTimeMillis() - Long.parseLong(vars.get("async_start_ms") ?: "0")
+def timeout = Long.parseLong(vars.get("ASYNC_TIMEOUT_MS") ?: "300000")
+if (vars.get("async_done") != "true") {
+    SampleResult.setSuccessful(false)
+    SampleResult.setResponseMessage("TIMEOUT after " + elapsed + "ms uuid=" + vars.get("async_uuid"))
+} else {
+    SampleResult.setIgnore()
+}
+              </stringProp>
+            </JSR223Sampler>
+            <hashTree/>
+
+            <UniformRandomTimer guiclass="UniformRandomTimerGui" testclass="UniformRandomTimer" testname="Pacing Timer" enabled="true">
+              <stringProp name="ConstantTimer.delay">${__P(THINK_TIME,500)}</stringProp>
+              <stringProp name="RandomTimer.range">${__P(RANDOM_DELAY,200)}</stringProp>
+            </UniformRandomTimer>
+            <hashTree/>
+
+          </hashTree>
+          <!-- end TransactionController -->
+
+        </hashTree>
+        <!-- end IfController async -->
+
+        <!-- ── SYNC path: IfController gates plain Predict Request ── -->
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="If sync" enabled="true">
+          <stringProp name="IfController.condition">"${IS_ASYNC}" != "true"</stringProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+          <boolProp name="IfController.useExpression">false</boolProp>
+        </IfController>
+        <hashTree>
+
+          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Predict Request" enabled="true">
+            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+              <collectionProp name="Arguments.arguments">
+                <elementProp name="" elementType="HTTPArgument">
+                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                  <stringProp name="Argument.value">${__FileToString(${PAYLOAD_FILE},UTF-8,)}</stringProp>
+                  <stringProp name="Argument.metadata">=</stringProp>
+                </elementProp>
+              </collectionProp>
+            </elementProp>
+            <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+            <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+            <stringProp name="HTTPSampler.protocol">${PROTOCOL}</stringProp>
+            <stringProp name="HTTPSampler.path">${PATH}</stringProp>
+            <stringProp name="HTTPSampler.method">POST</stringProp>
+            <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+            <boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>
+            <intProp name="HTTPSampler.ipSourceType">0</intProp>
+          </HTTPSamplerProxy>
+          <hashTree>
+            <UniformRandomTimer guiclass="UniformRandomTimerGui" testclass="UniformRandomTimer" testname="Pacing Timer" enabled="true">
+              <stringProp name="ConstantTimer.delay">${__P(THINK_TIME,1000)}</stringProp>
+              <stringProp name="RandomTimer.range">${__P(RANDOM_DELAY,1000)}</stringProp>
+            </UniformRandomTimer>
+            <hashTree/>
+          </hashTree>
+
+        </hashTree>
+        <!-- end IfController sync -->
+
+        <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report" enabled="true">
+          <boolProp name="ResultCollector.error_logging">false</boolProp>
+          <objProp>
+            <name>saveConfig</name>
+            <value class="SampleSaveConfiguration">
+              <time>true</time>
+              <latency>true</latency>
+              <timestamp>true</timestamp>
+              <success>true</success>
+              <label>true</label>
+              <code>true</code>
+              <message>true</message>
+              <threadName>true</threadName>
+              <dataType>true</dataType>
+              <encoding>false</encoding>
+              <assertions>true</assertions>
+              <subresults>true</subresults>
+              <responseData>false</responseData>
+              <samplerData>false</samplerData>
+              <xml>false</xml>
+              <fieldNames>true</fieldNames>
+              <responseHeaders>false</responseHeaders>
+              <requestHeaders>false</requestHeaders>
+              <responseDataOnError>false</responseDataOnError>
+              <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+              <assertionsResultsToSave>0</assertionsResultsToSave>
+              <bytes>true</bytes>
+              <sentBytes>true</sentBytes>
+              <url>true</url>
+              <threadCounts>true</threadCounts>
+              <idleTime>true</idleTime>
+              <connectTime>true</connectTime>
+            </value>
+          </objProp>
+          <stringProp name="filename"></stringProp>
+        </ResultCollector>
+        <hashTree/>
+
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

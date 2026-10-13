@@ -1,0 +1,34 @@
+{
+  "instances": [
+    {
+      "asset_num": "PUMP101",
+      "asset_facts": {
+        "asset_details_facts": {
+          "assetnum": "PUMP101",
+          "description": "Centrifugal feed pump",
+          "details": [
+            {
+              "assetnum": "PUMP101",
+              "description": "Centrifugal feed pump"
+            }
+          ]
+        },
+        "workorder_facts": {
+          "total_workorders_count": 1,
+          "workorders": [
+            {
+              "wonum": "WO-99120",
+              "description": "High vibration on pump bearing"
+            }
+          ],
+          "workorder_facts": [
+            {
+              "wonum": "WO-99120",
+              "description": "High vibration on pump bearing"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

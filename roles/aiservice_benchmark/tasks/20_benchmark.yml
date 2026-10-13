@@ -1,0 +1,10 @@
+---
+- name: Initialize Results Collection Fact
+  ansible.builtin.set_fact:
+    benchmark_final_results: []
+
+- name: Process each benchmark target capability
+  ansible.builtin.include_tasks: 21_run_single_capability.yml
+  loop: "{{ benchmark_targets }}"
+  loop_control:
+    loop_var: target_item

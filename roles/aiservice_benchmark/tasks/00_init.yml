@@ -1,0 +1,109 @@
+---
+- name: Validate OpenShift Authentication
+  ansible.builtin.command: oc whoami
+  register: oc_user_cmd
+  changed_when: false
+  failed_when: oc_user_cmd.rc != 0
+
+- name: Display OpenShift Cluster User
+  ansible.builtin.debug:
+    msg: "Authenticated with OpenShift as: {{ oc_user_cmd.stdout | trim }}"
+
+- name: Retrieve Active OpenShift Token
+  ansible.builtin.command: oc whoami -t
+  register: oc_token_cmd
+  changed_when: false
+
+- name: Set OpenShift Auth Facts
+  ansible.builtin.set_fact:
+    oc_token: "{{ oc_token_cmd.stdout | trim }}"
+
+- name: Ensure Results Output Directory Exists
+  ansible.builtin.file:
+    path: "{{ aiservice_results_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Discover all OpenShift Namespaces dynamically
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+  register: all_cluster_namespaces
+
+- name: Set Explicit Namespace if Provided
+  when: aiservice_namespace | length > 0
+  ansible.builtin.set_fact:
+    discovered_tenant_namespaces: ["{{ aiservice_namespace }}"]
+
+- name: Filter Tenant Namespaces by Tenant ID or Instance ID
+  when: aiservice_namespace | length == 0
+  vars:
+    # All aiservice namespaces except pipelines and gateway
+    base_ais_ns: >-
+      {{
+        all_cluster_namespaces.resources
+        | map(attribute='metadata.name')
+        | select('match', '^aiservice-')
+        | reject('search', 'pipelines')
+        | reject('search', 'aigateway')
+        | list
+      }}
+  ansible.builtin.set_fact:
+    discovered_tenant_namespaces: >-
+      {{
+        base_ais_ns
+        | select('match', '.*' + (aiservice_instance_id | default('', true)) + '.*' + (aiservice_tenant_id | default('', true)) + '$')
+        | list
+      }}
+
+- name: Fallback to all aiservice namespaces if tenant/instance filter matched nothing
+  when: aiservice_namespace | length == 0 and discovered_tenant_namespaces | length == 0
+  ansible.builtin.set_fact:
+    discovered_tenant_namespaces: >-
+      {{
+        all_cluster_namespaces.resources
+        | map(attribute='metadata.name')
+        | select('match', '^aiservice-')
+        | reject('search', 'pipelines')
+        | reject('search', 'aigateway')
+        | list
+      }}
+
+- name: Calculate Dynamic Multi-Tenant Tiers
+  vars:
+    avail_count: "{{ discovered_tenant_namespaces | length }}"
+    standard_tiers: [1, 2, 4, 6, 8, 10, 20, 50]
+  ansible.builtin.set_fact:
+    dynamic_tenant_tiers: >-
+      {{
+        (
+          standard_tiers
+          | select('le', avail_count | int)
+          | list
+          + [avail_count | int]
+        )
+        | unique
+        | select('gt', 0)
+        | sort
+      }}
+
+- name: Discover External AI Broker Route for E2E Mode
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    namespace: "aiservice-{{ aiservice_instance_id | default('apmdevops', true) }}"
+    name: aibroker
+  register: raw_aibroker_route
+  failed_when: false
+
+- name: Set AI Broker Gateway Host Fact
+  ansible.builtin.set_fact:
+    discovered_gateway_host: "{{ (raw_aibroker_route.resources[0].spec.host) if (raw_aibroker_route.resources | default([]) | length > 0) else 'aiservice.apps.aibrokerdev.cp.fyre.ibm.com' }}"
+
+- name: Display Discovered Tenant Namespaces & Gateway Host
+  ansible.builtin.debug:
+    msg:
+      - "Discovered {{ discovered_tenant_namespaces | length }} Tenant Namespaces: {{ discovered_tenant_namespaces }}"
+      - "Computed Dynamic Scaling Tiers: {{ dynamic_tenant_tiers }}"
+      - "Discovered AI Broker Ingress: {{ discovered_gateway_host }}"
+      - "Active Benchmark Mode: {{ aiservice_benchmark_mode }} (Workload: {{ aiservice_workload_type }})"

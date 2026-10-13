@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# JMeter & Test Run Outputs
+**/results/*
+!**/results/.gitkeep
+*.jtl
+*.log
+jmeter.log
+port_forward.log
+
+# OS & Editor Files
+.DS_Store
+.idea/
+.vscode/
+
+# Personal notes
+RESULTS_GUIDE.md

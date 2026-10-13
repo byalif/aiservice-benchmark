@@ -1,0 +1,12 @@
+---
+- name: "[Step 1/4] Validate OpenShift Connection & Discover Namespaces"
+  ansible.builtin.include_tasks: 00_init.yml
+
+- name: "[Step 2/4] Discover KServe InferenceServices for Enabled Capabilities"
+  ansible.builtin.include_tasks: 10_discover_models.yml
+
+- name: "[Step 3/4] Execute Capability Benchmark (Idle & Load Sampling)"
+  ansible.builtin.include_tasks: 20_benchmark.yml
+
+- name: "[Step 4/4] Write Benchmark Results Report"
+  ansible.builtin.include_tasks: 30_summary.yml

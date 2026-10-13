@@ -1,0 +1,14 @@
+---
+# Runs JMeter load tests against the pods, samples CPU and memory, and writes
+# BENCHMARK_RESULTS.md and benchmark_results.json to results/.
+# Read-only: nothing on the cluster is changed.
+- name: AI Service Capability Benchmark
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ playbook_dir }}/../vars/main.yml"
+
+  roles:
+    - role: aiservice_benchmark
