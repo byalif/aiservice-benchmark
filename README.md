@@ -20,26 +20,8 @@ only measures and writes the results, so the engineering team can decide.
 ## How to run it
 
 ```bash
-# Choose which capabilities to test. Several can be true; they run one after another.
-export AISERVICE_TEST_ALMWATSONX=true
-export AISERVICE_TEST_SIMILARITY=false
-export AISERVICE_TEST_FMEA=false
-export AISERVICE_TEST_NL2OSLC=false
-export AISERVICE_TEST_FIELDEXTRACTOR=false
-export AISERVICE_TEST_SMARTCLEANSE=false
-export AISERVICE_TEST_INSIGHTS=false
-export AISERVICE_TEST_DOCSEARCH=false
-export AISERVICE_TEST_PCC=false
-export AISERVICE_TEST_MCC=false
-
-# Where to look
-export AISERVICE_TENANT_ID=meta
-
-# Load settings
-export AISERVICE_CONCURRENCY=10   # Concurrent virtual users
-export AISERVICE_DURATION=180     # Test duration in seconds (3 mins)
-export AISERVICE_RAMP_UP=5        # User ramp-up time in seconds
-
+export AISERVICE_TENANT_ID=dev
+export AISERVICE_TEST_SIMILARITY=true
 ansible-playbook playbooks/benchmark.yml
 ```
 
@@ -107,6 +89,21 @@ Latency comes from JMeter's own report (`html_report/statistics.json`). The
 playbook keeps the **P95** (95 out of 100 requests were faster than this), the
 mean, requests per second, the request count and the error rate.
 
+**Tokens.** Each model response has a `usage` list with `input_token_count` and
+`output_token_count`. JMeter adds the list from every successful response to
+`token_usage.jsonl`. For `fieldextractor` and `smartcleanse` the list is read
+from the S3 result file once it appears, because the first reply is only a job
+id. When the run ends, `run_benchmark.sh` adds the lines up by model type and
+model name into `token_usage.json`.
+
+- The counts come from the pod's own answer. Nothing is written to the AI Broker
+  database, so nothing is reported to DRO or SLS.
+- Failed or timed-out requests are not counted, because no answer came back.
+- A model that returns no `usage` list shows 0 tokens. That means "none
+  reported", not "none used".
+- `nl2oslc` gives no model name for its `watsonx` usage, so it shows as
+  `not reported`.
+
 ---
 
 ## What is in the report
@@ -121,6 +118,7 @@ For each capability the report shows:
 | Requests, errors | JMeter's count of requests sent and how many failed |
 | P95, mean latency, throughput | JMeter's own report (`html_report/statistics.json`) |
 | Peak CPU, peak memory | The highest `oc adm top` sample (see above) |
+| Input, output, total tokens | Summed from the `usage` list in each response (see above) |
 
 The playbook does not turn these into new sizes. Look at peak usage next to the
 current request and limit and decide from there.
@@ -187,7 +185,7 @@ works for all of them.
 
 **Two kinds of capability.** Most return the answer straight away. `fieldextractor`
 and `smartcleanse` are queue-based: the first call only returns a job id, and
-the real result shows up later in S3 (MinIO).
+the real result shows up later in S3 (Ceph, in `openshift-storage`).
 
 - The plan checks a flag, `IS_ASYNC`. For `fieldextractor` and `smartcleanse`
   the script sets it to `true`.
@@ -195,9 +193,11 @@ the real result shows up later in S3 (MinIO).
   (default 5000) until the result file exists or `ASYNC_TIMEOUT_MS` (default
   300000, 5 minutes) passes. The time recorded is the whole wait, from sending
   to the result appearing.
-- The S3 check runs `python3` with `boto3`, so that must be installed.
+- The S3 check runs `python3` with `boto3`, so that must be installed. Set
+  `S3_PYTHON` to a different interpreter if the default `python3` doesn't have it.
 - To reach S3 from your machine, the script opens a second `oc port-forward`
-  to the MinIO service.
+  to `svc/s3` in `openshift-storage`, and reads the credentials from the
+  `km-s3-secret` secret in the tenant namespace.
 
 ### Folder layout
 

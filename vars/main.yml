@@ -1,12 +1,33 @@
 ---
-# Playbook-level variables. Values set here override the role defaults.
+# ==============================================================================
+# vars/main.yml — Top-Level Playbook Variable Overrides
+# ==============================================================================
+# WHY THIS FILE EXISTS (IBM MAS DevOps convention)
+# ─────────────────────────────────────────────────────────────────────────────
+# In the ibm.mas_devops pattern, playbooks keep a top-level vars/ directory for
+# variables that are shared across the playbook.  Each role also has its
+# own roles/<role>/defaults/main.yml for role-private defaults.
+#
+# This file serves two purposes:
+#   1. It is the single place to set cluster / tenant identity variables that
+#      the playbook and its role need to see.
+#   2. It provides a convenient override layer above env-var lookups — if you
+#      set a value here it wins over the role defaults without requiring an
+#      export or a CLI -e flag.
+#
+# The JMX test plan and run_benchmark.sh both live under
+#   roles/aiservice_benchmark/files/
+# That is the correct location per Ansible convention (role-owned files).
+# ==============================================================================
 
-# Cluster / tenant identity. Leave empty to auto-discover.
+# ── Cluster / Tenant Identity (shared) ─────────────────────────
+# Leave empty ("") to auto-discover from the cluster.
+# Set these to pin to a specific namespace / tenant / instance.
 aiservice_namespace:   "{{ lookup('env', 'AISERVICE_NAMESPACE')   | default('', true) }}"
 aiservice_tenant_id:   "{{ lookup('env', 'AISERVICE_TENANT_ID')   | default('', true) }}"
 aiservice_instance_id: "{{ lookup('env', 'AISERVICE_INSTANCE_ID') | default('', true) }}"
 
-# Capability test toggles
+# ── Capability Test Toggles (shared toggle surface) ──────────────────────────
 aiservice_test_similarity:     "{{ lookup('env', 'AISERVICE_TEST_SIMILARITY')     | default('true',  true) | bool }}"
 aiservice_test_fmea:           "{{ lookup('env', 'AISERVICE_TEST_FMEA')           | default('false', true) | bool }}"
 aiservice_test_mcc:            "{{ lookup('env', 'AISERVICE_TEST_MCC')            | default('false', true) | bool }}"
@@ -16,10 +37,10 @@ aiservice_test_docsearch:      "{{ lookup('env', 'AISERVICE_TEST_DOCSEARCH')    
 aiservice_test_nl2oslc:        "{{ lookup('env', 'AISERVICE_TEST_NL2OSLC')        | default('false', true) | bool }}"
 aiservice_test_insights:       "{{ lookup('env', 'AISERVICE_TEST_INSIGHTS')       | default('false', true) | bool }}"
 
-# Load parameters
+# ── Concurrency & Workload Parameters (shared) ───────────────────────────────
 aiservice_concurrency: "{{ lookup('env', 'AISERVICE_CONCURRENCY') | default(10,  true) | int }}"
 aiservice_duration:    "{{ lookup('env', 'AISERVICE_DURATION')    | default(180, true) | int }}"
 aiservice_ramp_up:     "{{ lookup('env', 'AISERVICE_RAMP_UP')     | default(5,   true) | int }}"
 
-# Output directory
+# ── Output Directory (shared) ─────────────────────────────────────────────────
 aiservice_results_dir: "{{ lookup('env', 'AISERVICE_RESULTS_DIR') | default(playbook_dir + '/../results', true) }}"

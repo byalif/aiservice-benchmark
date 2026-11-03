@@ -1,4 +1,9 @@
 ---
+# ==============================================================================
+# Role: aiservice_benchmark - Main Entrypoint
+# AI Service Capability Benchmark Runner
+# ==============================================================================
+
 - name: "[Step 1/4] Validate OpenShift Connection & Discover Namespaces"
   ansible.builtin.include_tasks: 00_init.yml
 

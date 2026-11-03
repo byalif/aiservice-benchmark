@@ -1,5 +1,13 @@
 ---
-# Models are matched by InferenceService name or by predictor container image.
+# ==============================================================================
+# Task: 10_discover_models.yml - Query KServe Models & Match Capabilities
+# ==============================================================================
+# Models are matched by EITHER:
+#   • metadata.name                       (e.g. s3similarity-mytenant)
+#   • spec.predictor.containers[0].image  (e.g. maximo-similarity-predictor:1.x)
+# The image path identifies hash-named ISVCs (e.g. s394f85be0c16811f in another tenant)
+# where the name carries no capability information.
+# ==============================================================================
 
 - name: Query KServe InferenceServices across all discovered tenant namespaces
   kubernetes.core.k8s_info:
@@ -13,7 +21,10 @@
   ansible.builtin.set_fact:
     active_isvcs: "{{ raw_isvcs_results.results | map(attribute='resources') | flatten }}"
 
-# Add a 'first_image' field to each ISVC so it can be filtered on directly.
+# Annotate each ISVC with a 'first_image' field so match tasks can filter on
+# a plain string attribute without needing index notation inside selectattr.
+# We build a new list one item at a time via loop so the image expression can
+# reference the current loop variable directly.
 - name: Reset annotated ISVC list
   ansible.builtin.set_fact:
     active_isvcs_annotated: []
@@ -41,7 +52,10 @@
   ansible.builtin.set_fact:
     benchmark_targets: []
 
-# Match capabilities to InferenceServices (name match + image match, deduplicated)
+# ------------------------------------------------------------------------------
+# Match Capabilities to InferenceServices
+# Each block unions name-match + image-match results then deduplicates.
+# ------------------------------------------------------------------------------
 
 - name: Match Similarity Models
   when: aiservice_test_similarity | bool
@@ -293,7 +307,11 @@
       }}
   loop: "{{ matched[:1] }}"
 
-# Record each target's current --workers value (0 if not set)
+# ------------------------------------------------------------------------------
+# Record the current --workers value of each target (from the ISVC container
+# args, in either spec.predictor.model.args or spec.predictor.containers[0].args).
+# 0 means the ISVC has no --workers argument.
+# ------------------------------------------------------------------------------
 - name: Reset worker-annotated target list
   ansible.builtin.set_fact:
     benchmark_targets_annotated: []

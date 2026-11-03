@@ -1,4 +1,10 @@
 ---
+# ==============================================================================
+# Task: 30_summary.yml - Write the Benchmark Results Report
+# ==============================================================================
+# Reports what was measured. It does not suggest new sizes.
+# ==============================================================================
+
 - name: Render Benchmark Results Report
   ansible.builtin.set_fact:
     summary_markdown_content: |
@@ -22,6 +28,31 @@
       | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
       {% for item in benchmark_final_results %}
       | **{{ item.capability | capitalize }}** | {{ item.concurrency }} | {{ item.duration }}s | {{ item.samples }} | {{ item.error_pct }}% | {{ item.p95_ms }} ms | {{ item.mean_ms }} ms | {{ item.throughput_rps }} req/s | {{ item.peak_cpu_millicores }}m | {{ item.peak_memory_mib }}Mi |
+      {% endfor %}
+
+      ## 3. Token usage
+
+      Tokens are summed from the `usage` list in each model response, read straight from the pod.
+      They are not written to the AI Broker database. "Responses with usage" is how many of the
+      successful responses carried a `usage` list; a model that reports none shows 0.
+
+      | Capability | Input Tokens | Output Tokens | Total Tokens | Responses with usage | Tokens / request (in / out / total) |
+      | :--- | :--- | :--- | :--- | :--- | :--- |
+      {% for item in benchmark_final_results %}
+      | **{{ item.capability | capitalize }}** | {{ item.input_tokens }} | {{ item.output_tokens }} | {{ item.total_tokens }} | {{ item.responses_with_usage }} of {{ item.samples }} | {{ item.input_tokens_per_request }} / {{ item.output_tokens_per_request }} / {{ item.tokens_per_request }} |
+      {% endfor %}
+
+      Tokens per request is the number to compare between runs. Totals depend on how many
+      requests fit in the test window.
+
+      ### Tokens by model
+
+      | Capability | Model Type | Model Name | Input | Output | Total |
+      | :--- | :--- | :--- | :--- | :--- | :--- |
+      {% for item in benchmark_final_results %}
+      {% for m in item.token_models %}
+      | **{{ item.capability | capitalize }}** | {{ m.model_type }} | `{{ m.model_name }}` | {{ m.input_tokens }} | {{ m.output_tokens }} | {{ m.total_tokens }} |
+      {% endfor %}
       {% endfor %}
 
 - name: Ensure Results Output Directory Exists

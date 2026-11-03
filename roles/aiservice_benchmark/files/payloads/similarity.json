@@ -1,0 +1,64 @@
+{
+  "instances": [
+    {
+      "Unnamed: 0": 147,
+      "Case Number": 99016625873,
+      "merged_Case Subject_Case Description": "Execute MAS Production Dry Run on 07/08 Execute MAS Production Dry Run on 07/08 from SAAS PROD. we expect to take timing for each activity. we hope the outage will not be more than 30 hrs Also, as discussed please migrate existing attachment prior to 07/08 and the delta during the Dry run on 07/08\\ attn: Gustavo",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 67,
+      "Case Number": 99016626111,
+      "merged_Case Subject_Case Description": "Please create my user in Websphere of MIR01 Please help create my user in Websphere of MIR01. username: gracer Please email my password to: regine.gracein@nationalgrid.com Thanks!",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 107,
+      "Case Number": 99016646057,
+      "merged_Case Subject_Case Description": "How to view pmwogen.log in MAS SaaS environment PROBLEM DESCRIPTION: Problem Description: We have noticed that Automatic work order generation from PM is not working, we have noticed it for Site 2230. There are many other sites with the same issue. Can you please investigate and let us know what is causing this? Or please help me how do I see the pmwogen.log file, I can investigate this myself.",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 74,
+      "Case Number": 99016636507,
+      "merged_Case Subject_Case Description": "Restore of Tririga Non-Prod environment needed Hi, We would like to refresh Tririga non-prod environment with data using backup taken from prod - Case number TS015828603 (Application 10.8, Platform 4.2).",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 42,
+      "Case Number": 99016638355,
+      "merged_Case Subject_Case Description": "SMTP / outbound email activation Please configure our MAS-Dedicated environment to use the following SMTP server: SMTP hostname: massaas-s2svpn-12212-dev-nlb-ca22a334b35acfd9.elb.us-east-1.amazonaws.com SMTP Port: 587",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 95,
+      "Case Number": 99015997319,
+      "merged_Case Subject_Case Description": "Performance issue - network latency between the Manage pod and the database. Customer reports they observed login to MAS and manage and Start WO, Finish WO, navigating to logs tab and actuals tab, when we go back to start center and logout it is taking some more time like more than 10 seconds.",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 9,
+      "Case Number": 99016743171,
+      "merged_Case Subject_Case Description": "Web/WAF firewall rules and/or Cloudflare issues blocking customer access to Prod Environment. Customer is not able to access any application in Manage. We see the following message: Please enable cookies. Sorry, you have been blocked.",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 49,
+      "Case Number": 99016706744,
+      "merged_Case Subject_Case Description": "IBM MAS Upgrade Request Hello Team, According to our entitlement for the Maximo SaaS Flex offering, we are entitled to an upgrade to the IBM Maximo Application Suite (MAS). To ensure a smooth and seamless transition, we would like to request a meeting with the appropriate teams to align expectations and go over the upgrade process in detail.",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 44,
+      "Case Number": 99016692962,
+      "merged_Case Subject_Case Description": "Maximo Performance - PRD Hi Sibandi, Can you take a look at PRD. She seems to be running very slow today.",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    },
+    {
+      "Unnamed: 0": 16,
+      "Case Number": 99016655814,
+      "merged_Case Subject_Case Description": "Apply Manage patch 8.7.8 Hello, METALSA needs to have Manage patch 8.7.8 applied to their dev environment. Can you please assist?",
+      "changedate": "2025-10-29T23:16:28+05:30"
+    }
+  ]
+}

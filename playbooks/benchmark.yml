@@ -1,7 +1,17 @@
 ---
-# Runs JMeter load tests against the pods, samples CPU and memory, and writes
-# BENCHMARK_RESULTS.md and benchmark_results.json to results/.
-# Read-only: nothing on the cluster is changed.
+# ==============================================================================
+# Playbook: benchmark.yml — AI Service Capability Benchmark
+# ==============================================================================
+# WHAT THIS DOES
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs JMeter load tests against the pods as they are, samples CPU and memory
+# with 'oc adm top', and writes two reports to results/:
+#   - BENCHMARK_RESULTS.md    (pod sizes at test time, P95 latency, errors,
+#                              peak CPU / memory)
+#   - benchmark_results.json  (the same data, as JSON)
+#
+# This playbook never changes anything on the cluster. It only measures.
+# ==============================================================================
 - name: AI Service Capability Benchmark
   hosts: localhost
   connection: local

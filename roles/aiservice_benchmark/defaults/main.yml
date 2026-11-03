@@ -1,16 +1,23 @@
 ---
-# Role defaults. Every variable can be overridden with an AISERVICE_* environment variable.
+# ==============================================================================
+# Role Defaults for aiservice_benchmark
+# Patterned after IBM MAS DevOps collection (ibm.mas_devops)
+# All variables support environment variable overrides (e.g. export AISERVICE_...)
+# ==============================================================================
 
-# Namespace filter (exact namespace). Leave empty to auto-discover.
+# Direct Namespace or Tenant Filters (Optional)
+# 1. Exact Namespace override (e.g., 'aiservice-apmdevops-user')
 aiservice_namespace: "{{ lookup('env', 'AISERVICE_NAMESPACE') | default('', true) }}"
 
-# Tenant ID filter
+# 2. Tenant ID (e.g., 'dev', 'tenant1')
 aiservice_tenant_id: "{{ lookup('env', 'AISERVICE_TENANT_ID') | default('', true) }}"
 
-# Instance ID filter. Matches namespaces named 'aiservice-<instance_id>-*'.
+# 3. AI Service Instance ID (e.g., 'apmdevops', 'ais', 'dev')
+# If provided, filters tenant namespaces matching 'aiservice-<instance_id>-*'
+# If left empty (""), discovers all namespaces containing models across the whole cluster.
 aiservice_instance_id: "{{ lookup('env', 'AISERVICE_INSTANCE_ID') | default('', true) }}"
 
-# Capability test toggles (AISERVICE_TEST_<CAPABILITY>)
+# Capability Test Toggles (Environment variables: AISERVICE_TEST_<CAPABILITY>)
 aiservice_test_similarity: "{{ lookup('env', 'AISERVICE_TEST_SIMILARITY') | default('false', true) | bool }}"
 aiservice_test_fmea: "{{ lookup('env', 'AISERVICE_TEST_FMEA') | default('false', true) | bool }}"
 aiservice_test_mcc: "{{ lookup('env', 'AISERVICE_TEST_MCC') | default('false', true) | bool }}"
@@ -22,21 +29,22 @@ aiservice_test_pcc: "{{ lookup('env', 'AISERVICE_TEST_PCC') | default('false', t
 aiservice_test_smartcleanse: "{{ lookup('env', 'AISERVICE_TEST_SMARTCLEANSE') | default('false', true) | bool }}"
 aiservice_test_almwatsonx: "{{ lookup('env', 'AISERVICE_TEST_ALMWATSONX') | default('false', true) | bool }}"
 
-# Mode: 'capability' (direct to predictor) or 'e2e' (through the gateway)
+# Benchmark Execution Mode & Workload Profile
+# 1. Mode: 'capability' (Direct KServe Predictor tunnel) OR 'e2e' (Full AI Broker Gateway + Db2u Ingress)
 aiservice_benchmark_mode: "{{ lookup('env', 'AISERVICE_BENCHMARK_MODE') | default('capability', true) }}"
 
-# Workload: 'single' (one record) or 'batch_50' (50 records)
+# 2. Workload Type: 'single' (1 workorder record / UI latency) OR 'batch_50' (50 workorders / cron batch)
 aiservice_workload_type: "{{ lookup('env', 'AISERVICE_WORKLOAD_TYPE') | default('single', true) }}"
 
-# Multi-tenant scaling
+# Multi-Tenant Scaling Benchmark Options (Generates mhc-1tenant.json, mhc-2tenants.json, etc.)
 aiservice_enable_multi_tenant: "{{ lookup('env', 'AISERVICE_ENABLE_MULTI_TENANT') | default('false', true) | bool }}"
 aiservice_tenant_scale_limit: "{{ lookup('env', 'AISERVICE_TENANT_SCALE_LIMIT') | default(10, true) | int }}"
 
-# Load parameters
+# Benchmark Execution Parameters
 aiservice_concurrency: "{{ lookup('env', 'AISERVICE_CONCURRENCY') | default(10, true) | int }}"
 aiservice_duration: "{{ lookup('env', 'AISERVICE_DURATION') | default(180, true) | int }}"
 aiservice_ramp_up: "{{ lookup('env', 'AISERVICE_RAMP_UP') | default(5, true) | int }}"
 
-# Output directories
+# Output Directories
 aiservice_results_dir: "{{ lookup('env', 'AISERVICE_RESULTS_DIR') | default(playbook_dir + '/../results', true) }}"
 aiservice_templates_dir: "{{ lookup('env', 'AISERVICE_TEMPLATES_DIR') | default(playbook_dir + '/../model_templates', true) }}"

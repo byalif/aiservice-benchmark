@@ -8,7 +8,7 @@ async queue-based models (fieldextractor, smartcleanse).
 
 Pass -JIS_ASYNC=true for async models. The plan will:
   1. POST /predict  — record UUID from response
-  2. Poll S3 via MinIO HTTP until result appears (or timeout)
+  2. Poll Ceph/NooBaa S3 (via local port-forward, HTTPS) until result appears (or timeout)
   3. Wrap both in a Transaction so the recorded latency = full end-to-end time.
 </stringProp>
       <boolProp name="TestPlan.functional_mode">false</boolProp>
@@ -63,17 +63,12 @@ Pass -JIS_ASYNC=true for async models. The plan will:
           </elementProp>
           <elementProp name="S3_PORT" elementType="Argument">
             <stringProp name="Argument.name">S3_PORT</stringProp>
-            <stringProp name="Argument.value">${__P(S3_PORT,9000)}</stringProp>
+            <stringProp name="Argument.value">${__P(S3_PORT,443)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
-          <elementProp name="S3_USER" elementType="Argument">
-            <stringProp name="Argument.name">S3_USER</stringProp>
-            <stringProp name="Argument.value">${__P(S3_USER,minio)}</stringProp>
-            <stringProp name="Argument.metadata">=</stringProp>
-          </elementProp>
-          <elementProp name="S3_PASS" elementType="Argument">
-            <stringProp name="Argument.name">S3_PASS</stringProp>
-            <stringProp name="Argument.value">${__P(S3_PASS,minio123)}</stringProp>
+          <elementProp name="S3_PYTHON" elementType="Argument">
+            <stringProp name="Argument.name">S3_PYTHON</stringProp>
+            <stringProp name="Argument.value">${__P(S3_PYTHON,python3)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="ASYNC_POLL_INTERVAL_MS" elementType="Argument">
@@ -197,51 +192,80 @@ try {
               </ConstantTimer>
               <hashTree/>
 
-              <!-- Poll S3 via boto3 subprocess — MinIO requires AWS Signature V4,
+              <!-- Poll S3 via boto3 subprocess — Ceph/NooBaa requires AWS Signature V4,
                    not HTTP Basic, so JMeter's AuthManager cannot be used here.
-                   We shell out to python3 (available on the benchmark host) which
-                   uses boto3 with the same credentials run_benchmark.sh uses. -->
+                   We shell out to S3_PYTHON (needs boto3). Credentials come from the
+                   S3_ACCESS_KEY / S3_SECRET_KEY environment variables exported by
+                   run_benchmark.sh, so they never appear in a command line.
+                   TLS verify is off because the tunnel is localhost, which the
+                   service-signed Ceph certificate does not cover. -->
+              <!-- When the result file exists, the same python call downloads it and
+                   prints its "usage" list on a second line. The line is appended to
+                   USAGE_FILE (one JSON object per request) for token counting. -->
               <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Poll S3 result" enabled="true">
                 <stringProp name="scriptLanguage">groovy</stringProp>
                 <stringProp name="script">
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 def s3path  = vars.get("async_s3_path") ?: ""   // /bucket/key
 def parts   = s3path.replaceFirst("^/","").split("/", 2)
 def bucket  = parts.length > 0 ? parts[0] : ""
 def key     = parts.length > 1 ? parts[1] : ""
 def s3host  = vars.get("S3_HOST") ?: "localhost"
-def s3port  = vars.get("S3_PORT") ?: "9000"
-def s3user  = vars.get("S3_USER") ?: "minio"
-def s3pass  = vars.get("S3_PASS") ?: "minio123"
+def s3port  = vars.get("S3_PORT") ?: "443"
+def s3py    = vars.get("S3_PYTHON") ?: "python3"
 
 def cmd = [
-  "python3", "-c",
+  s3py, "-c",
   """
-import boto3, sys
+import boto3, json, os, sys, urllib3
+urllib3.disable_warnings()
 from botocore.client import Config
 s3 = boto3.client('s3',
-    endpoint_url='http://${s3host}:${s3port}',
-    aws_access_key_id='${s3user}',
-    aws_secret_access_key='${s3pass}',
+    endpoint_url='https://${s3host}:${s3port}',
+    aws_access_key_id=os.environ['S3_ACCESS_KEY'],
+    aws_secret_access_key=os.environ['S3_SECRET_KEY'],
     config=Config(signature_version='s3v4'),
-    region_name='us-east-1')
+    region_name='us-east-1',
+    verify=False)
 try:
     s3.head_object(Bucket='${bucket}', Key='${key}')
-    print('200')
 except s3.exceptions.ClientError as e:
     print(e.response['Error']['Code'])
+    sys.exit(0)
 except Exception as e:
     print('ERR:' + str(e))
+    sys.exit(0)
+print('200')
+try:
+    body = s3.get_object(Bucket='${bucket}', Key='${key}')['Body'].read()
+    usage = json.loads(body).get('usage', [])
+    print(json.dumps(usage if isinstance(usage, list) else []))
+except Exception:
+    print('[]')
 """.stripIndent()
 ]
 
 def proc  = cmd.execute()
-proc.waitForOrKill(8000)
-def out   = proc.text?.trim() ?: "ERR"
+proc.waitForOrKill(20000)
+def lines = (proc.text ?: "").readLines()
+def out   = lines ? lines[0].trim() : "ERR"
 SampleResult.setResponseCode(out == "200" ? "200" : "404")
 SampleResult.setResponseMessage(out)
 SampleResult.setSuccessful(out == "200")
 if (out == "200") {
     vars.put("async_done", "true")
+    def usagePath = props.get("USAGE_FILE")
+    if (usagePath) {
+        def usage = []
+        try {
+            usage = new JsonSlurper().parseText(lines.size() > 1 ? lines[1] : "[]")
+        } catch (Exception e) {
+            log.warn("could not parse usage from async result: " + e.getMessage())
+        }
+        def entry = JsonOutput.toJson([usage: usage]) + "\n"
+        synchronized (props) { new File(usagePath).append(entry) }
+    }
 }
                 </stringProp>
               </JSR223Sampler>
@@ -312,6 +336,31 @@ if (vars.get("async_done") != "true") {
               <stringProp name="ConstantTimer.delay">${__P(THINK_TIME,1000)}</stringProp>
               <stringProp name="RandomTimer.range">${__P(RANDOM_DELAY,1000)}</stringProp>
             </UniformRandomTimer>
+            <hashTree/>
+
+            <!-- Token counting: append the response's "usage" list to USAGE_FILE
+                 (one JSON object per successful response). Summed by run_benchmark.sh. -->
+            <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Record token usage" enabled="true">
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="script">
+import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
+def usagePath = props.get("USAGE_FILE")
+if (usagePath &amp;&amp; prev.isSuccessful()) {
+    def usage = []
+    try {
+        def json = new JsonSlurper().parseText(prev.getResponseDataAsString())
+        if (json instanceof Map &amp;&amp; json.usage instanceof List) {
+            usage = json.usage
+        }
+    } catch (Exception e) {
+        // response was not JSON; counted as a response with no usage
+    }
+    def entry = JsonOutput.toJson([usage: usage]) + "\n"
+    synchronized (props) { new File(usagePath).append(entry) }
+}
+              </stringProp>
+            </JSR223PostProcessor>
             <hashTree/>
           </hashTree>
 

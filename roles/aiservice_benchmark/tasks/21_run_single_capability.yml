@@ -1,4 +1,8 @@
 ---
+# ==============================================================================
+# Task: 21_run_single_capability.yml - Execute Single Capability Benchmark
+# ==============================================================================
+
 - name: "Starting Benchmark for {{ target_item.capability | upper }} (Model: {{ target_item.model_id }})"
   ansible.builtin.debug:
     msg: "Benchmarking capability: {{ target_item.capability }} in {{ target_item.namespace }} with {{ aiservice_concurrency }} users for {{ aiservice_duration }}s"
@@ -30,7 +34,9 @@
   ignore_errors: true
 
 - name: "Read CPU/Memory Peak from Background Sampler Log"
-  # Log format: <timestamp> <pod_name> <cpu> <memory>
+  # Log format: <timestamp> <pod_name> <cpu_millicores> <memory_mib>
+  # e.g.: 02:45:56 s35c0eb52...-predictor-xxx   7118m   2841Mi
+  # $1=timestamp  $2=pod_name  $3=cpu  $4=mem  → use $3 and $4
   ansible.builtin.shell: >
     awk 'NF>=4 {
       gsub(/m/, "", $3); gsub(/Mi/, "", $4);
@@ -42,8 +48,16 @@
   changed_when: false
   ignore_errors: true
 
+- name: "Read Token Usage Totals"
+  # Written by run_benchmark.sh: per model_type/model_name input, output and total tokens
+  ansible.builtin.slurp:
+    src: "{{ latest_baseline_run_cmd.stdout | trim }}/token_usage.json"
+  register: token_usage_raw
+  ignore_errors: true
+
 - name: "Record Benchmark Results for {{ target_item.capability }}"
   vars:
+    token_data: "{{ (token_usage_raw.content | b64decode | from_json) if (token_usage_raw.content is defined) else {} }}"
     stat_data: "{{ (baseline_stat_json_raw.content | b64decode | from_json) if (baseline_stat_json_raw.content is defined) else {} }}"
     total_stat: "{{ stat_data['Total'] | default(stat_data['Predict Request'] | default({})) }}"
     p95_ms: "{{ (total_stat.pct2ResTime | default(0)) | float | round(1) }}"
@@ -51,10 +65,15 @@
     tps: "{{ (total_stat.throughput | default(0)) | float | round(2) }}"
     error_pct: "{{ (total_stat.errorPct | default(0)) | float | round(1) }}"
     samples: "{{ total_stat.sampleCount | default(0) | int }}"
-    # Peak CPU / memory from the sampler log
+    # Highest CPU / memory sample from the 'oc adm top' log (see the awk task above)
     _peak_parts: "{{ (peak_resources_cmd.stdout | default('0 0') | trim).split() }}"
     peak_cpu_m:  "{{ _peak_parts[0] | default('0') | int }}"
     peak_mem_mi: "{{ _peak_parts[1] | default('0') | int }}"
+    # Per-request averages use only responses that carried a usage list
+    _usage_n: "{{ token_data.responses_with_usage | default(0) | int }}"
+    in_per_req:    "{{ ((token_data.input_tokens  | default(0)) / (_usage_n | int)) | round(0) | int if (_usage_n | int) > 0 else 0 }}"
+    out_per_req:   "{{ ((token_data.output_tokens | default(0)) / (_usage_n | int)) | round(0) | int if (_usage_n | int) > 0 else 0 }}"
+    total_per_req: "{{ ((token_data.total_tokens  | default(0)) / (_usage_n | int)) | round(0) | int if (_usage_n | int) > 0 else 0 }}"
   ansible.builtin.set_fact:
     benchmark_final_results: >-
       {{
@@ -74,6 +93,14 @@
           'samples':                 samples,
           'peak_cpu_millicores':     peak_cpu_m,
           'peak_memory_mib':         peak_mem_mi,
+          'input_tokens':            token_data.input_tokens | default(0),
+          'output_tokens':           token_data.output_tokens | default(0),
+          'total_tokens':            token_data.total_tokens | default(0),
+          'input_tokens_per_request':  in_per_req | int,
+          'output_tokens_per_request': out_per_req | int,
+          'tokens_per_request':        total_per_req | int,
+          'responses_with_usage':    token_data.responses_with_usage | default(0),
+          'token_models':            token_data.models | default([]),
           'concurrency':             aiservice_concurrency | int,
           'duration':                aiservice_duration
         }]

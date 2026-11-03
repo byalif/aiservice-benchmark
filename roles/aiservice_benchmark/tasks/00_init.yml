@@ -1,4 +1,8 @@
 ---
+# ==============================================================================
+# Task: 00_init.yml - Connection Validation & Dynamic Namespace Discovery
+# ==============================================================================
+
 - name: Validate OpenShift Authentication
   ansible.builtin.command: oc whoami
   register: oc_user_cmd
@@ -38,7 +42,7 @@
 - name: Filter Tenant Namespaces by Tenant ID or Instance ID
   when: aiservice_namespace | length == 0
   vars:
-    # All aiservice namespaces except pipelines and gateway
+    # Base filter: all aiservice namespaces excluding pipelines & gateway control plane
     base_ais_ns: >-
       {{
         all_cluster_namespaces.resources
@@ -56,7 +60,20 @@
         | list
       }}
 
-- name: Fallback to all aiservice namespaces if tenant/instance filter matched nothing
+- name: Fail if a tenant or instance was requested but no namespace matched
+  when:
+    - aiservice_namespace | length == 0
+    - discovered_tenant_namespaces | length == 0
+    - (aiservice_tenant_id | length > 0) or (aiservice_instance_id | length > 0)
+  ansible.builtin.fail:
+    msg: >-
+      No aiservice namespace matched AISERVICE_TENANT_ID='{{ aiservice_tenant_id }}'
+      and AISERVICE_INSTANCE_ID='{{ aiservice_instance_id }}'.
+      Namespaces look like aiservice-<instance>-<tenant>.
+      Check your exports with: env | grep AISERVICE_
+      Refusing to benchmark every namespace.
+
+- name: Fallback to all aiservice namespaces when no tenant or instance was requested
   when: aiservice_namespace | length == 0 and discovered_tenant_namespaces | length == 0
   ansible.builtin.set_fact:
     discovered_tenant_namespaces: >-
